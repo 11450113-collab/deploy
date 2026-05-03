@@ -1,19 +1,19 @@
-# sharedchat-auto-worker v2
+# sharedchat-auto-worker v3
 
-Cloudflare Worker reverse proxy for https://chat.sharedchat.cn/ with injected auto-click script.
+Cloudflare Worker reverse proxy + auto click script.
 
 ## Deploy with GitHub Actions
 
-1. Upload this folder to a GitHub repo.
-2. Add repo secrets:
+1. Upload these files to your GitHub repository.
+2. Add repository secrets:
    - CLOUDFLARE_API_TOKEN
    - CLOUDFLARE_ACCOUNT_ID
-3. Push to the `main` branch.
+3. Push to `main`.
 
 ## Test
 
-- Health check: `https://red-wind-9895.<your-subdomain>.workers.dev/__health`
-- Upstream debug: `https://red-wind-9895.<your-subdomain>.workers.dev/__debug`
-- Main page: `https://red-wind-9895.<your-subdomain>.workers.dev/`
+- `/__health` should show `ok v3`
+- `/__debug` shows upstream status and redirect info
+- `/__version` shows worker version
 
-If `/__health` shows `ok` but `/__debug` shows 403, the upstream site is blocking Cloudflare Worker fetch requests.
+If `/__debug` shows an external redirect to `workers.cloudflare.com`, the upstream site is redirecting Cloudflare Worker fetches. v3 will stop forwarding that redirect and show a diagnostic page instead.

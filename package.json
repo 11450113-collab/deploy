@@ -1,6 +1,6 @@
 {
   "name": "sharedchat-auto-worker",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,6 @@
     "dev": "wrangler dev"
   },
   "devDependencies": {
-    "wrangler": "latest"
+    "wrangler": "^4.0.0"
   }
 }
