@@ -1,26 +1,17 @@
-# sharedchat-auto-worker v4
+# sharedchat-auto-worker v5
 
-This Cloudflare Worker proxies the actual SharedChat app and injects an auto-click script.
+This version avoids the white-page issue by serving a local picker page first, fetching the upstream list through the Worker, then opening the selected sharedchat page through a local proxy.
 
-Important: `chat.sharedchat.cn/list` contains a browser-side script that redirects based on the current hostname. When proxied through `workers.dev`, that script redirects to `workers.dev`, which Cloudflare then shows as `workers.cloudflare.com/zh-tw`. v4 bypasses `/list` and proxies `https://sharedchat.cn/` directly.
+## Deploy with GitHub Actions
 
-## GitHub deploy
-
-1. Upload/commit all files to your GitHub repository.
+1. Upload all files to your GitHub repository.
 2. Add repository secrets:
-   - `CLOUDFLARE_API_TOKEN`
-   - `CLOUDFLARE_ACCOUNT_ID`
-3. Push to `main`.
+   - CLOUDFLARE_API_TOKEN
+   - CLOUDFLARE_ACCOUNT_ID
+3. Push to main.
 
-## Test URLs
+## Test
 
-- `https://red-wind-9895.pichulinboy.workers.dev/__health`
-- `https://red-wind-9895.pichulinboy.workers.dev/__version`
-- `https://red-wind-9895.pichulinboy.workers.dev/__debug`
-- `https://red-wind-9895.pichulinboy.workers.dev/?v=4`
-
-Expected health output:
-
-```text
-ok v4-bypass-list
-```
+- /__health should show `ok v5-self-rendered-list`
+- /__debug shows upstream fetch status
+- /__clear clears proxy cookies
