@@ -1,0 +1,13 @@
+{
+  "name": "sharedchat-auto-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker reverse proxy for chat.sharedchat.cn with auto-click/password injection.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
