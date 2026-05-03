@@ -1,24 +1,18 @@
-# sharedchat-auto-worker v6
+# sharedchat-auto-worker v7
 
-Cloudflare Worker project. It proxies the real SharedChat SPA on `https://sharedchat.cn/`, keeps the browser on your workers.dev URL, injects an auto-click script, generates a random 9-digit password, fills the password prompt, and clicks OK.
+This Worker proxies `https://sharedchat.cn/` and injects an auto-selection script.
 
-## Deploy with GitHub Actions
+Auto flow:
 
-Required GitHub repository secrets:
+1. Load the SharedChat SPA through your Worker URL.
+2. Automatically find and click `TEAM\u7a7a\u95f2|\u63a8\u8350`.
+3. When the password prompt appears, create a random 9-digit password.
+4. Fill the password and click `OK`.
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
+Useful URLs after deployment:
 
-Push to `main` to deploy.
+- `/__health` checks the deployed version.
+- `/__debug` checks upstream HTML and asset status.
+- `/__clear` clears local cookies.
 
-## Test URLs
-
-```text
-https://red-wind-9895.pichulinboy.workers.dev/__health
-https://red-wind-9895.pichulinboy.workers.dev/__debug
-https://red-wind-9895.pichulinboy.workers.dev/__asset_debug
-https://red-wind-9895.pichulinboy.workers.dev/__clear
-https://red-wind-9895.pichulinboy.workers.dev/?v=6
-```
-
-If the page appears blank, open `/__asset_debug` and check whether the JS and CSS assets return status `200` with the right content type.
+Deploy through GitHub Actions by pushing to `main`.
