@@ -1,53 +1,41 @@
 const TARGET_ORIGIN = "https://chat.sharedchat.cn";
+const DEFAULT_ENTRY_PATH = "/list";
 
 export default {
   async fetch(request) {
     const incomingUrl = new URL(request.url);
 
     if (incomingUrl.pathname === "/__health") {
-      return new Response("ok");
+      return new Response("ok", {
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     }
 
-    const targetUrl = new URL(incomingUrl.pathname + incomingUrl.search, TARGET_ORIGIN);
+    if (incomingUrl.pathname === "/__debug") {
+      return debugUpstream(request);
+    }
 
-    const reqHeaders = new Headers(request.headers);
-    reqHeaders.delete("host");
-    reqHeaders.set("origin", TARGET_ORIGIN);
-    reqHeaders.set("referer", TARGET_ORIGIN + "/");
+    const targetPath = incomingUrl.pathname === "/" ? DEFAULT_ENTRY_PATH : incomingUrl.pathname;
+    const targetUrl = new URL(targetPath + incomingUrl.search, TARGET_ORIGIN);
 
-    const init = {
+    const upstream = await fetch(targetUrl.toString(), {
       method: request.method,
-      headers: reqHeaders,
+      headers: makeCleanUpstreamHeaders(request),
+      body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
       redirect: "manual",
-    };
+    });
 
-    if (!["GET", "HEAD"].includes(request.method)) {
-      init.body = request.body;
-    }
+    const responseHeaders = new Headers(upstream.headers);
+    sanitizeResponseHeaders(responseHeaders);
+    rewriteLocationHeader(responseHeaders);
+    rewriteSetCookieHeaders(upstream.headers, responseHeaders);
 
-    const upstream = await fetch(targetUrl.toString(), init);
-
-    const resHeaders = new Headers(upstream.headers);
-
-    // Remove headers that may block injected script or proxy rendering.
-    resHeaders.delete("content-security-policy");
-    resHeaders.delete("content-security-policy-report-only");
-    resHeaders.delete("x-frame-options");
-
-    // Rewrite upstream redirects so they stay inside this Worker.
-    const location = resHeaders.get("location");
-    if (location) {
-      resHeaders.set("location", rewriteUrlToProxy(location));
-    }
-
-    rewriteSetCookieHeaders(upstream.headers, resHeaders);
-
-    const contentType = resHeaders.get("content-type") || "";
+    const contentType = responseHeaders.get("content-type") || "";
 
     let response = new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
-      headers: resHeaders,
+      headers: responseHeaders,
     });
 
     if (contentType.includes("text/html")) {
@@ -56,6 +44,9 @@ export default {
         .on("link", new AttrRewriter("href"))
         .on("script", new AttrRewriter("src"))
         .on("img", new AttrRewriter("src"))
+        .on("source", new AttrRewriter("src"))
+        .on("video", new AttrRewriter("src"))
+        .on("audio", new AttrRewriter("src"))
         .on("form", new AttrRewriter("action"))
         .on("body", {
           element(element) {
@@ -68,6 +59,105 @@ export default {
     return response;
   },
 };
+
+async function debugUpstream(request) {
+  const url = new URL(DEFAULT_ENTRY_PATH, TARGET_ORIGIN);
+
+  try {
+    const upstream = await fetch(url.toString(), {
+      method: "GET",
+      headers: makeCleanUpstreamHeaders(request),
+      redirect: "manual",
+    });
+
+    const cloned = upstream.clone();
+    let preview = "";
+
+    try {
+      preview = await cloned.text();
+      preview = preview.slice(0, 1200);
+    } catch (err) {
+      preview = "Cannot read upstream body: " + err.message;
+    }
+
+    const data = {
+      ok: upstream.ok,
+      status: upstream.status,
+      statusText: upstream.statusText,
+      url: url.toString(),
+      location: upstream.headers.get("location"),
+      contentType: upstream.headers.get("content-type"),
+      server: upstream.headers.get("server"),
+      bodyPreview: preview,
+    };
+
+    return Response.json(data, {
+      status: 200,
+      headers: {
+        "cache-control": "no-store",
+      },
+    });
+  } catch (err) {
+    return Response.json(
+      {
+        ok: false,
+        error: err.message,
+        url: url.toString(),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+function makeCleanUpstreamHeaders(request) {
+  const source = request.headers;
+  const headers = new Headers();
+
+  headers.set(
+    "user-agent",
+    source.get("user-agent") ||
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  );
+  headers.set(
+    "accept",
+    source.get("accept") ||
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+  );
+  headers.set("accept-language", source.get("accept-language") || "zh-TW,zh;q=0.9,en;q=0.8");
+  headers.set("cache-control", "no-cache");
+  headers.set("pragma", "no-cache");
+  headers.set("referer", TARGET_ORIGIN + "/");
+
+  const cookie = source.get("cookie");
+  if (cookie) headers.set("cookie", cookie);
+
+  const contentType = source.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
+
+  if (!["GET", "HEAD"].includes(request.method)) {
+    headers.set("origin", TARGET_ORIGIN);
+  }
+
+  return headers;
+}
+
+function sanitizeResponseHeaders(headers) {
+  headers.delete("content-security-policy");
+  headers.delete("content-security-policy-report-only");
+  headers.delete("x-frame-options");
+  headers.delete("cross-origin-opener-policy");
+  headers.delete("cross-origin-embedder-policy");
+  headers.delete("cross-origin-resource-policy");
+
+  headers.set("cache-control", "no-store");
+}
+
+function rewriteLocationHeader(headers) {
+  const location = headers.get("location");
+  if (!location) return;
+
+  headers.set("location", rewriteUrlToProxy(location));
+}
 
 class AttrRewriter {
   constructor(attr) {
@@ -92,7 +182,8 @@ function rewriteUrlToProxy(value) {
       value.startsWith("blob:") ||
       value.startsWith("mailto:") ||
       value.startsWith("tel:") ||
-      value.startsWith("javascript:")
+      value.startsWith("javascript:") ||
+      value.startsWith("#")
     ) {
       return value;
     }
@@ -120,7 +211,6 @@ function rewriteSetCookieHeaders(sourceHeaders, targetHeaders) {
   for (const cookie of cookies) {
     if (!cookie) continue;
 
-    // Remove Domain so cookies bind to your Worker domain.
     const rewritten = cookie
       .replace(/;\s*Domain=[^;]*/gi, "")
       .replace(/;\s*SameSite=None/gi, "; SameSite=Lax");
